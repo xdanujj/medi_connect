@@ -7,14 +7,25 @@ const doctorSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true
+      unique: true,
     },
 
     // ===== FILLED BY DOCTOR =====
     name: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
+    },
+    number: {
+      type: Number,
+      unique: true,
+      required: true,
+      trim: true,
+    },
+
+    description: {
+      type: String,
+      trim: true,
     },
 
     specialization: {
@@ -31,15 +42,15 @@ const doctorSchema = new mongoose.Schema(
         "Gynecologist",
         "Dentist",
         "Ophthalmologist",
-        "Other"
+        "Other",
       ],
-      required: true
+      required: true,
     },
 
     clinic: {
       name: {
         type: String,
-        required: true
+        required: true,
       },
 
       location: {
@@ -50,31 +61,31 @@ const doctorSchema = new mongoose.Schema(
 
         coordinates: {
           latitude: Number,
-          longitude: Number
-        }
-      }
+          longitude: Number,
+        },
+      },
     },
 
     licensePdf: {
       type: String, // Cloudinary / S3 URL
-      required: true
+      required: true,
     },
 
     profilePhoto: {
-      type: String
+      type: String,
     },
 
     // ===== ADMIN CONTROL ONLY =====
     approved: {
       type: Boolean,
-      default: false
+      default: false,
     },
 
     approvedAt: {
-      type: Date
-    }
+      type: Date,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const Doctor = mongoose.model("Doctor", doctorSchema);

@@ -1,7 +1,4 @@
 import mongoose, { Schema } from "mongoose";
-import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs";
-
 const patientSchema = new Schema(
   {
     userId: {
@@ -26,10 +23,6 @@ const patientSchema = new Schema(
       type: String,
       enum: ["Male", "Female", "Other"],
     },
-    refreshToken: {
-      type: String,
-    },
-
     profilePhoto: String,
   },
   { timestamps: true },

@@ -14,8 +14,8 @@ app.use(express.urlencoded({extended: true, limit: "16kb"}))
 app.use(express.static("public"))
 app.use(cookieParser())
 
-import patientRouter from "./routes/patient.routes.js"
+import authRouter from "./routes/auth.routes.js";
 
-app.use("/api/v1/patient",patientRouter)
+app.use("/api/v1/auth",authRouter);
 
 export {app};
