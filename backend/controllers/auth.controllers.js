@@ -10,21 +10,47 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
+  // 1️⃣ Find user (patient OR doctor)
   const user = await User.findOne({ email }).select("+password");
 
   if (!user) {
     throw new ApiError(404, "User not found");
   }
 
+  // 2️⃣ Check password
   const isPasswordValid = await user.isPasswordCorrect(password);
 
   if (!isPasswordValid) {
     throw new ApiError(401, "Invalid credentials");
   }
 
+  // 3️⃣ If doctor → check approval
+  if (user.role === "doctor") {
+    const doctorProfile = await Doctor.findOne({ userId: user._id });
+
+    if (!doctorProfile) {
+      throw new ApiError(404, "Doctor profile not found");
+    }
+
+    if (!doctorProfile.approved) {
+      return res.status(403).json(
+        new ApiResponse(
+          403,
+          {
+            role: "doctor",
+            approved: false,
+          },
+          "Profile Under Verification. Please wait for admin approval.",
+        ),
+      );
+    }
+  }
+
+  // 4️⃣ Generate tokens
   const { accessToken, refreshToken } =
     await generateAccessAndRefreshTokens(user);
 
+  // 5️⃣ Send response
   return res.status(200).json(
     new ApiResponse(
       200,
@@ -44,6 +70,8 @@ const loginUser = asyncHandler(async (req, res) => {
 
 const registerDoctor = asyncHandler(async (req, res) => {
   const {
+    email,
+    password,
     name,
     number,
     description,
@@ -58,22 +86,30 @@ const registerDoctor = asyncHandler(async (req, res) => {
   } = req.body;
 
   // 🔎 Validate required fields
-  if (!name || !number || !specialization || !clinicName) {
-    throw new ApiError(400, "Required fields are missing");
+  if (
+    !email ||
+    !password ||
+    !name ||
+    !number ||
+    !specialization ||
+    !clinicName
+  ) {
+    throw new ApiError(400, "All required fields must be provided");
   }
 
-  // 🔐 Check if doctor profile already exists for this user
-  const existingDoctor = await Doctor.findOne({ userId: req.user._id });
-  if (existingDoctor) {
-    throw new ApiError(400, "Doctor profile already exists");
-  }
-
-  // 📄 Check license PDF
+  // 📄 License PDF required
   if (!req.files?.licensePdf?.[0]) {
     throw new ApiError(400, "License PDF is required");
   }
 
-  // ☁️ Upload license PDF
+  // 🔍 Check if user already exists
+  const existingUser = await User.findOne({ email });
+
+  if (existingUser) {
+    throw new ApiError(409, "User already exists with this email");
+  }
+
+  // ☁️ Upload license PDF first
   const licenseUpload = await uploadOnCloudinary(
     req.files.licensePdf[0].path,
     "mediconnect/doctors/licenses",
@@ -95,9 +131,16 @@ const registerDoctor = asyncHandler(async (req, res) => {
     profilePhotoUrl = profileUpload?.secure_url || null;
   }
 
+  // 👤 Create user (role = doctor)
+  const user = await User.create({
+    email,
+    password,
+    role: "doctor",
+  });
+
   // 🏥 Create doctor profile
   const doctor = await Doctor.create({
-    userId: req.user._id,
+    userId: user._id, // ✅ correct
     name,
     number,
     description,
@@ -117,24 +160,24 @@ const registerDoctor = asyncHandler(async (req, res) => {
     },
     licensePdf: licenseUpload.secure_url,
     profilePhoto: profilePhotoUrl,
-    approved: false, // 🔒 Admin must approve
+    approved: false, // 🔒 must be approved by admin
   });
 
-  return res
-    .status(201)
-    .json(
-      new ApiResponse(
-        201,
-        doctor,
-        "Doctor registered successfully. Awaiting admin approval.",
-      ),
-    );
+  return res.status(201).json(
+    new ApiResponse(
+      201,
+      {
+        userId: user._id,
+        email: user.email,
+        approved: false,
+      },
+      "Doctor registered successfully. Awaiting admin approval.",
+    ),
+  );
 });
 
 const registerPatient = asyncHandler(async (req, res) => {
-  const {email, password, name, phone, age, gender } = req.body;
-  console.log(req.body);
-  console.log(req.files);
+  const { email, password, name, phone, age, gender } = req.body;
 
   if (!email || !password || !name || !gender || !phone || !age) {
     throw new ApiError(400, "Enter all necessary fields!");

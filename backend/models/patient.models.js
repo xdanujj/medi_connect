@@ -23,7 +23,9 @@ const patientSchema = new Schema(
       type: String,
       enum: ["Male", "Female", "Other"],
     },
+
     profilePhoto: String,
+    
   },
   { timestamps: true },
 );

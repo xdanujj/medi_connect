@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const slotSchema = new mongoose.Schema(
   {
-    doctor: {
+    doctorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Doctor",
       required: true,
@@ -64,11 +64,13 @@ const slotSchema = new mongoose.Schema(
 
 // 🔐 Prevent duplicate slots
 slotSchema.index(
-  { doctor: 1, startDateTime: 1 },
+  { doctorId: 1, startDateTime: 1 },
   { unique: true }
 );
 
-// Fast booking page queries
-slotSchema.index({ doctor: 1, status: 1, startDateTime: 1 });
+// ⚡ Fast booking queries
+slotSchema.index(
+  { doctorId: 1, status: 1, startDateTime: 1 }
+);
 
 export const Slot = mongoose.model("Slot", slotSchema);
