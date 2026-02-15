@@ -85,7 +85,7 @@ const doctorSchema = new mongoose.Schema(
       type: Date,
     },
   },
-  { timestamps: true },
+  {timestamps: true }
 );
 
 export const Doctor = mongoose.model("Doctor", doctorSchema);

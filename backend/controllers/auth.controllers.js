@@ -4,11 +4,10 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.models.js";
 import { generateAccessAndRefreshTokens } from "../utils/generateAccessRefreshToken.js";
 import { Patient } from "../models/patient.models.js";
-import { Doctor } from "../models/doctor.model.js";
+import { Doctor } from "../models/doctor.models.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 
-
-export const loginUser = asyncHandler(async (req, res) => {
+const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   const user = await User.findOne({ email }).select("+password");
@@ -42,7 +41,6 @@ export const loginUser = asyncHandler(async (req, res) => {
     ),
   );
 });
-
 
 const registerDoctor = asyncHandler(async (req, res) => {
   const {
@@ -134,7 +132,7 @@ const registerDoctor = asyncHandler(async (req, res) => {
 });
 
 const registerPatient = asyncHandler(async (req, res) => {
-  const { email, password, name, phone, age, gender } = req.body;
+  const {email, password, name, phone, age, gender } = req.body;
   console.log(req.body);
   console.log(req.files);
 
@@ -186,4 +184,37 @@ const registerPatient = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, createdUser, "User Registered Successfully!"));
 });
 
-export { loginUser, registerDoctor, registerPatient };
+const logoutUser = asyncHandler(async (req, res) => {
+  // 🔐 1️⃣ Make sure user exists (verifyJWT middleware already ran)
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized request");
+  }
+
+  // 🔄 2️⃣ Remove refresh token from DB
+  await User.findByIdAndUpdate(
+    userId,
+    {
+      $set: {
+        refreshToken: null,
+      },
+    },
+    { new: true },
+  );
+
+  // 🍪 3️⃣ Clear cookies
+  const options = {
+    httpOnly: true,
+    secure: true, // set true in production
+    sameSite: "strict",
+  };
+
+  res
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .status(200)
+    .json(new ApiResponse(200, {}, "User logged out successfully"));
+});
+
+export { loginUser, registerDoctor, registerPatient, logoutUser };

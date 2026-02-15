@@ -1,7 +1,7 @@
 import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
-import { Patient } from "../models/patient.models.js";
+import { User } from "../models/user.models.js";
 
 export const verifyJWT = asyncHandler(async (req, _, next) => {
   try {
@@ -12,20 +12,21 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
     if (!token) {
       throw new ApiError(401, "Unauthorized request");
     }
+    console.log("Cookies:", req.cookies);
+    console.log("Authorization Header:", req.header("Authorization"));
+    console.log("Extracted Token:", token);
 
-    const decodedToken = jwt.verify(
-      token,
-      process.env.ACCESS_TOKEN_SECRET
+    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+
+    const user = await User.findById(decodedToken._id).select(
+      "-password -refreshToken",
     );
 
-    const patient = await Patient.findById(decodedToken._id)
-      .select("-password -refreshToken");
-
-    if (!patient) {
+    if (!user) {
       throw new ApiError(401, "Invalid Access Token");
     }
 
-    req.patient = patient;
+    req.user = user;
     next();
   } catch (error) {
     throw new ApiError(401, error.message || "Invalid access token");
