@@ -6,47 +6,28 @@ const availabilitySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Doctor",
       required: true,
-      index: true
+      index: true,
     },
-
     date: {
       type: Date,
-      required: true
+      required: true,
     },
-
     isAvailable: {
       type: Boolean,
-      default: true
+      default: true,
     },
-
-    startTime: {
-      type: String // "09:00"
-    },
-
-    endTime: {
-      type: String
-    },
-
+    startTime: { type: String }, // Format: "HH:mm" (24h)
+    endTime: { type: String }, // Format: "HH:mm" (24h)
     breaks: [
       {
-        startTime: {
-          type: String
-        },
-        endTime: {
-          type: String
-        }
-      }
-    ]
+        startTime: { type: String },
+        endTime: { type: String },
+      },
+    ],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-availabilitySchema.index(
-  { doctorId: 1, date: 1 },
-  { unique: true }
-);
+availabilitySchema.index({ doctorId: 1, date: 1 }, { unique: true });
 
-export const Availability = mongoose.model(
-  "Availability",
-  availabilitySchema
-);
+export const Availability = mongoose.model("Availability", availabilitySchema);

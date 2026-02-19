@@ -1,4 +1,5 @@
 import express from "express";
+
 import {
   registerDoctor,
   registerPatient,
@@ -9,8 +10,9 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 const router = express.Router();
 
-router.post(
-  "/signup/doctor",
+
+
+router.post("/signup/doctor",
   upload.fields([
     { name: "licensePdf", maxCount: 1 },
     { name: "profilePhoto", maxCount: 1 },
@@ -18,8 +20,7 @@ router.post(
   registerDoctor,
 );
 
-router.post(
-  "/signup/patient",
+router.post("/signup/patient",
 
   upload.fields([{ name: "profilePhoto", maxCount: 1 }]),
 
