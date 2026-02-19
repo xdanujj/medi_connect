@@ -2,10 +2,12 @@ import { Availability } from "../models/availability.models.js";
 import { Doctor } from "../models/doctor.models.js";
 import { generateSlotsFromAvailability } from "../utils/slotGenerator.js";
 import { asyncHandler } from "../utils/asyncHandler.js"; // Assuming you have this
-import { ApiError } from "../utils/ApiError.js";       // Assuming you have this
+import { ApiError } from "../utils/ApiError.js"; // Assuming you have this
 import { ApiResponse } from "../utils/ApiResponse.js"; // Assuming you have this
+import { Appointment } from "../models/appointment.models.js";
 // Helper to validate 24-hour HH:mm format
-const isValid24HourFormat = (timeStr) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(timeStr);
+const isValid24HourFormat = (timeStr) =>
+  /^([01]\d|2[0-3]):([0-5]\d)$/.test(timeStr);
 
 export const setAvailability = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
@@ -30,14 +32,14 @@ export const setAvailability = asyncHandler(async (req, res) => {
         endTime: null,
         breaks: [],
       },
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     );
 
     await generateSlotsFromAvailability(availability);
 
-    return res.status(200).json(
-      new ApiResponse(200, availability, "Doctor marked unavailable")
-    );
+    return res
+      .status(200)
+      .json(new ApiResponse(200, availability, "Doctor marked unavailable"));
   }
 
   if (!startTime || !endTime) {
@@ -56,14 +58,20 @@ export const setAvailability = asyncHandler(async (req, res) => {
   //  Validate breaks
   if (breaks && breaks.length > 0) {
     const sortedBreaks = [...breaks].sort((a, b) =>
-      a.startTime.localeCompare(b.startTime)
+      a.startTime.localeCompare(b.startTime),
     );
 
     for (let i = 0; i < sortedBreaks.length; i++) {
       const br = sortedBreaks[i];
 
-      if (!isValid24HourFormat(br.startTime) || !isValid24HourFormat(br.endTime)) {
-        throw new ApiError(400, "Break times must be in 24-hour format (HH:mm)");
+      if (
+        !isValid24HourFormat(br.startTime) ||
+        !isValid24HourFormat(br.endTime)
+      ) {
+        throw new ApiError(
+          400,
+          "Break times must be in 24-hour format (HH:mm)",
+        );
       }
 
       if (br.startTime >= br.endTime) {
@@ -92,12 +100,34 @@ export const setAvailability = asyncHandler(async (req, res) => {
       endTime,
       breaks: breaks || [],
     },
-    { upsert: true, new: true }
+    { upsert: true, new: true },
   );
 
   await generateSlotsFromAvailability(availability);
 
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, availability, "Availability set & slots generated"),
+    );
+});
+
+export const getAppointments = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  if (!userId) throw new ApiError(401, "Unauthorized");
+
+  const doctor = await Doctor.findOne({ userId }).select("_id");
+  if (!doctor) throw new ApiError(404, "Doctor profile not found");
+
+  const appointments = await Appointment.find({ doctor: doctor._id })
+    .populate("patient", "name age")
+    .populate("slot", "startDateTime endDateTime");
+
   return res.status(200).json(
-    new ApiResponse(200, availability, "Availability set & slots generated")
+    new ApiResponse(
+      200,
+      appointments,
+      "Doctor appointments fetched successfully"
+    )
   );
 });
