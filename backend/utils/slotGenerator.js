@@ -1,111 +1,95 @@
 import { Slot } from "../models/slot.models.js";
 
+/**
+ * Generate slots from doctor availability
+ * Parses 24-hour time and stores literal IST times directly into MongoDB.
+ */
 export const generateSlotsFromAvailability = async (
   availability,
-  slotDuration = 15 // default 15 mins
+  slotDuration = 15
 ) => {
   const { doctorId, date, isAvailable, startTime, endTime, breaks } = availability;
 
-  if (!doctorId || !date) {
-    console.log("Missing doctorId or date");
-    return;
-  }
+  if (!doctorId || !date) return;
 
-  // 1. Setup Date boundaries (Using UTC to avoid timezone shifts)
   const baseDate = new Date(date);
-  
-  // Set explicit start/end of the day in UTC to catch all slots for that specific date
-  const startOfDay = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth(), baseDate.getUTCDate(), 0, 0, 0));
-  const endOfDay = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth(), baseDate.getUTCDate(), 23, 59, 59));
 
-  // 2. Delete OLD slots (Safe Mode: Only delete 'available' slots)
-  // We do NOT want to delete 'booked' slots if the doctor changes their schedule.
-  await Slot.deleteMany({
-    doctorId,
-    startDateTime: { $gte: startOfDay, $lte: endOfDay },
-    status: "available", 
-  });
-
-  if (!isAvailable) {
-    console.log("Doctor unavailable. Open slots cleared.");
-    return;
-  }
-
-  if (!startTime || !endTime) return;
-
-  // 3. Convert Times to Minutes
   const parseTimeToMinutes = (timeStr) => {
     const [hours, minutes] = timeStr.split(":").map(Number);
     return hours * 60 + minutes;
   };
 
-  const startTotalMinutes = parseTimeToMinutes(startTime);
-  const endTotalMinutes = parseTimeToMinutes(endTime);
+  // Delete all existing slots for that day to prevent duplicates
+  const startOfDay = new Date(Date.UTC(
+    baseDate.getUTCFullYear(),
+    baseDate.getUTCMonth(),
+    baseDate.getUTCDate(),
+    0, 0, 0
+  ));
 
-  if (startTotalMinutes >= endTotalMinutes) return;
+  const endOfDay = new Date(Date.UTC(
+    baseDate.getUTCFullYear(),
+    baseDate.getUTCMonth(),
+    baseDate.getUTCDate(),
+    23, 59, 59
+  ));
+
+  await Slot.deleteMany({
+    doctorId,
+    startDateTime: { $gte: startOfDay, $lte: endOfDay }
+  });
+
+  if (!isAvailable) return;
+
+  const startMinutes = parseTimeToMinutes(startTime);
+  const endMinutes = parseTimeToMinutes(endTime);
+
+  if (startMinutes >= endMinutes) return;
 
   const slotsToInsert = [];
 
-  // 4. Loop through minutes to generate slots
   for (
-    let currentMinutes = startTotalMinutes;
-    currentMinutes + slotDuration <= endTotalMinutes;
-    currentMinutes += slotDuration
+    let current = startMinutes;
+    current + slotDuration <= endMinutes;
+    current += slotDuration
   ) {
-    const currentEndMinutes = currentMinutes + slotDuration;
+    const slotEnd = current + slotDuration;
 
-    // 5. Check for Break Overlaps
-    const isInBreak = breaks?.some((br) => {
+    // Check if the current slot overlaps with any break
+    const inBreak = breaks?.some((br) => {
       const breakStart = parseTimeToMinutes(br.startTime);
       const breakEnd = parseTimeToMinutes(br.endTime);
-
-      // Check if the slot overlaps with the break interval
-      // (Slot Starts before Break Ends) AND (Slot Ends after Break Starts)
-      return currentMinutes < breakEnd && currentEndMinutes > breakStart;
+      // If slot starts before break ends AND slot ends after break starts = Overlap
+      return current < breakEnd && slotEnd > breakStart;
     });
 
-    if (isInBreak) continue;
-
-    // 6. Create Date Objects (UTC)
-    // We construct the specific date-time for the slot
-    const slotStartDate = new Date(Date.UTC(
+    // Store the literal time directly (Bypassing UTC conversion so DB shows IST time)
+    const slotStartDB = new Date(Date.UTC(
       baseDate.getUTCFullYear(),
       baseDate.getUTCMonth(),
       baseDate.getUTCDate(),
-      Math.floor(currentMinutes / 60),
-      currentMinutes % 60
+      Math.floor(current / 60),
+      current % 60
     ));
 
-    const slotEndDate = new Date(Date.UTC(
+    const slotEndDB = new Date(Date.UTC(
       baseDate.getUTCFullYear(),
       baseDate.getUTCMonth(),
       baseDate.getUTCDate(),
-      Math.floor(currentEndMinutes / 60),
-      currentEndMinutes % 60
+      Math.floor(slotEnd / 60),
+      slotEnd % 60
     ));
-
-    // 7. Check if a 'booked' slot already exists at this time (Prevent double booking)
-    const existingSlot = await Slot.findOne({
-      doctorId,
-      startDateTime: slotStartDate,
-      status: { $ne: "available" } // If status is booked/locked
-    });
-
-    if (existingSlot) {
-      continue; // Skip creating a new slot if a booking exists here
-    }
 
     slotsToInsert.push({
       doctorId,
-      startDateTime: slotStartDate,
-      endDateTime: slotEndDate,
-      status: "available",
+      startDateTime: slotStartDB,
+      endDateTime: slotEndDB,
+      status: inBreak ? "unavailable" : "available",
+      isActive: !inBreak, 
     });
   }
 
-  // 8. Bulk Insert
   if (slotsToInsert.length > 0) {
     await Slot.insertMany(slotsToInsert);
-    console.log(`Generated ${slotsToInsert.length} slots for doctor ${doctorId}`);
   }
 };
