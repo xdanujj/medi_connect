@@ -8,6 +8,7 @@ import { Slot } from "../models/slot.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import crypto from "crypto";
 
 const DEFAULT_HOLD_MINUTES = 10;
 const ALLOWED_HOLD_MINUTES = new Set([5, 10]);
@@ -192,14 +193,16 @@ const getDoctorAvailableSlots = asyncHandler(async (req, res) => {
   const currentIST = new Date(now.getTime() + istOffset);
 
   // 3. Create a 'Literal' date object to match DB storage format
-  const comparisonTime = new Date(Date.UTC(
-    currentIST.getUTCFullYear(),
-    currentIST.getUTCMonth(),
-    currentIST.getUTCDate(),
-    currentIST.getUTCHours(),
-    currentIST.getUTCMinutes(),
-    0
-  ));
+  const comparisonTime = new Date(
+    Date.UTC(
+      currentIST.getUTCFullYear(),
+      currentIST.getUTCMonth(),
+      currentIST.getUTCDate(),
+      currentIST.getUTCHours(),
+      currentIST.getUTCMinutes(),
+      0,
+    ),
+  );
 
   await releaseExpiredLocks(doctorId);
 
@@ -306,6 +309,8 @@ const holdSlotForPayment = asyncHandler(async (req, res) => {
 /*                     CONFIRM PAYMENT & BOOK APPOINTMENT                     */
 /* -------------------------------------------------------------------------- */
 
+
+
 const confirmPaymentAndBookAppointment = asyncHandler(async (req, res) => {
   const patient = await ensurePatient(req.user);
 
@@ -320,6 +325,20 @@ const confirmPaymentAndBookAppointment = asyncHandler(async (req, res) => {
     razorpaySignature,
     paymentMethod,
   } = req.body;
+
+  if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+  throw new ApiError(400, "Missing payment details");
+}
+
+  if (
+    !verifySignature(
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature
+    )
+  ) {
+    throw new ApiError(400, "Invalid payment");
+  }
 
   if (!slotId || !mongoose.Types.ObjectId.isValid(slotId)) {
     throw new ApiError(400, "A valid slotId is required");

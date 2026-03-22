@@ -6,6 +6,7 @@ import {
   confirmPaymentAndBookAppointment,
 } from "../controllers/appointment.controllers.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { createOrder } from "../controllers/payment.controllers.js";
 
 const router = Router();
 
@@ -15,6 +16,8 @@ router.get("/doctor/:doctorId/slots",verifyJWT, getDoctorAvailableSlots);
 
 router.post("/hold", verifyJWT, holdSlotForPayment);
 
-router.post("/confirm", verifyJWT, confirmPaymentAndBookAppointment);
+router.post("/confirm-booking", verifyJWT, confirmPaymentAndBookAppointment);
+
+router.post("/create-order", verifyJWT, createOrder);
 
 export default router;
