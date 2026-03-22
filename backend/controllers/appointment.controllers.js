@@ -3,6 +3,7 @@ import { Appointment } from "../models/appointment.models.js";
 import { Doctor } from "../models/doctor.models.js";
 import { Patient } from "../models/patient.models.js";
 import { Payment } from "../models/payment.models.js";
+import { Service } from "../models/services.models.js";
 import { Slot } from "../models/slot.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -119,6 +120,24 @@ const getVerifiedAvailableDoctors = asyncHandler(async (_, res) => {
     .lean();
 
   const slotMap = new Map(slotStats.map((stat) => [String(stat._id), stat]));
+  const serviceStats = await Service.aggregate([
+    {
+      $match: {
+        doctorId: { $in: doctorIds },
+        isActive: true,
+      },
+    },
+    {
+      $group: {
+        _id: "$doctorId",
+        serviceCount: { $sum: 1 },
+        startingFee: { $min: "$price" },
+      },
+    },
+  ]);
+  const serviceMap = new Map(
+    serviceStats.map((stat) => [String(stat._id), stat]),
+  );
 
   const availableDoctors = doctors
     .map((doctor) => ({
@@ -126,6 +145,8 @@ const getVerifiedAvailableDoctors = asyncHandler(async (_, res) => {
       availableSlotsCount:
         slotMap.get(String(doctor._id))?.availableSlotsCount ?? 0,
       nextAvailableSlot: slotMap.get(String(doctor._id))?.nextAvailableSlot,
+      serviceCount: serviceMap.get(String(doctor._id))?.serviceCount ?? 0,
+      startingFee: serviceMap.get(String(doctor._id))?.startingFee ?? null,
     }))
     .sort(
       (a, b) => new Date(a.nextAvailableSlot) - new Date(b.nextAvailableSlot),
@@ -193,11 +214,20 @@ const getDoctorAvailableSlots = asyncHandler(async (req, res) => {
     .sort({ startDateTime: 1 })
     .lean();
 
+  const services = await Service.find({
+    doctorId,
+    isActive: true,
+  })
+    .select("name description price duration")
+    .sort({ price: 1, name: 1 })
+    .lean();
+
   return res.status(200).json(
     new ApiResponse(
       200,
       {
         doctor,
+        services,
         slots,
         totalSlots: slots.length,
       },
@@ -283,7 +313,8 @@ const confirmPaymentAndBookAppointment = asyncHandler(async (req, res) => {
     slotId,
     amount,
     tokenAmount,
-    serviceName,
+    serviceIds,
+    serviceId,
     razorpayOrderId,
     razorpayPaymentId,
     razorpaySignature,
@@ -294,14 +325,34 @@ const confirmPaymentAndBookAppointment = asyncHandler(async (req, res) => {
     throw new ApiError(400, "A valid slotId is required");
   }
 
-  const numericAmount = Number(amount);
+  const requestedServiceIds = Array.isArray(serviceIds)
+    ? serviceIds
+    : serviceId
+      ? [serviceId]
+      : [];
+  const normalizedServiceIds = [...new Set(requestedServiceIds.map(String))];
 
-  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-    throw new ApiError(400, "A valid payment amount is required");
+  if (
+    normalizedServiceIds.length === 0 ||
+    normalizedServiceIds.some((id) => !mongoose.Types.ObjectId.isValid(id))
+  ) {
+    throw new ApiError(400, "At least one valid serviceId is required");
   }
 
   if (!razorpayOrderId) {
     throw new ApiError(400, "razorpayOrderId is required");
+  }
+
+  const providedAmount =
+    amount === undefined || amount === null || amount === ""
+      ? null
+      : Number(amount);
+
+  if (
+    providedAmount !== null &&
+    (!Number.isFinite(providedAmount) || providedAmount <= 0)
+  ) {
+    throw new ApiError(400, "If amount is provided it must be a valid number");
   }
 
   const session = await mongoose.startSession();
@@ -348,12 +399,54 @@ const confirmPaymentAndBookAppointment = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Verified doctor not found");
       }
 
-      const duration = Math.max(
+      const matchedServices = await Service.find({
+        _id: { $in: normalizedServiceIds },
+        doctorId: doctor._id,
+        isActive: true,
+      }).session(session);
+
+      if (matchedServices.length !== normalizedServiceIds.length) {
+        throw new ApiError(404, "One or more selected services were not found");
+      }
+
+      const serviceMap = new Map(
+        matchedServices.map((service) => [String(service._id), service]),
+      );
+      const orderedServices = normalizedServiceIds.map((id) =>
+        serviceMap.get(String(id)),
+      );
+      const totalPrice = orderedServices.reduce(
+        (sum, service) => sum + service.price,
+        0,
+      );
+
+      if (providedAmount !== null && providedAmount !== totalPrice) {
+        throw new ApiError(
+          400,
+          `Amount mismatch. Selected services must be paid at ${totalPrice}`,
+        );
+      }
+
+      const slotDuration = Math.max(
         1,
         Math.round(
           (slotToBook.endDateTime - slotToBook.startDateTime) / (60 * 1000),
         ),
       );
+      const bookedServices = orderedServices.map((service) => ({
+        serviceId: service._id,
+        name: service.name,
+        duration:
+          Number.isFinite(service.duration) && service.duration > 0
+            ? service.duration
+            : slotDuration,
+        fee: service.price,
+      }));
+      const totalDuration =
+        bookedServices.reduce(
+          (sum, service) => sum + (service.duration || 0),
+          0,
+        ) || slotDuration;
 
       [appointment] = await Appointment.create(
         [
@@ -361,10 +454,12 @@ const confirmPaymentAndBookAppointment = asyncHandler(async (req, res) => {
             patient: patient._id,
             doctor: doctor._id,
             slot: slotToBook._id,
+            services: bookedServices,
             service: {
-              name: serviceName || "Consultation",
-              duration,
-              fee: numericAmount,
+              serviceIds: bookedServices.map((service) => service.serviceId),
+              name: bookedServices.map((service) => service.name).join(", "),
+              duration: totalDuration,
+              fee: totalPrice,
             },
             startDateTime: slotToBook.startDateTime,
             endDateTime: slotToBook.endDateTime,
@@ -382,7 +477,7 @@ const confirmPaymentAndBookAppointment = asyncHandler(async (req, res) => {
             appointment: appointment._id,
             patient: patient._id,
             doctor: doctor._id,
-            amount: numericAmount,
+            amount: totalPrice,
             razorpayOrderId,
             razorpayPaymentId,
             razorpaySignature,

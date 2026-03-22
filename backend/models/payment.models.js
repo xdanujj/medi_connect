@@ -23,7 +23,7 @@ const paymentSchema = new mongoose.Schema(
     },
     tokenAmount: {
       type: Number,
-      default: 50, // ₹50-100 token
+      //default: 50, // ₹50-100 token
     },
     razorpayOrderId: {
       type: String,

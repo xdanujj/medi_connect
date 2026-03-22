@@ -22,7 +22,25 @@ const appointmentSchema = new mongoose.Schema(
       required: true,
     },
 
+    services: [
+      {
+        serviceId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Service",
+        },
+        name: String,
+        duration: Number,
+        fee: Number,
+      },
+    ],
+
     service: {
+      serviceIds: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Service",
+        },
+      ],
       name: String,
       duration: Number,
       fee: Number,
