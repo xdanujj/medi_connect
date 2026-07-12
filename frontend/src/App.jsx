@@ -11,12 +11,15 @@ import DashboardLayout from './components/DashboardLayout';
 import DoctorsListPage from './pages/patient/DoctorsListPage';
 import BookingPage from './pages/patient/BookingPage';
 import PatientAppointmentsPage from './pages/patient/PatientAppointmentsPage';
+import PatientPrescriptionsPage from './pages/patient/PatientPrescriptionsPage';
 
 // Doctor pages
 import DoctorDashboardPage from './pages/doctor/DoctorDashboardPage';
 import AvailabilityPage from './pages/doctor/AvailabilityPage';
 import ServicesPage from './pages/doctor/ServicesPage';
 import DoctorAppointmentsPage from './pages/doctor/DoctorAppointmentsPage';
+import ConsultationPage from './pages/doctor/ConsultationPage';
+import DoctorPrescriptionsPage from './pages/doctor/DoctorPrescriptionsPage';
 
 const App = () => {
   return (
@@ -49,6 +52,7 @@ const App = () => {
           <Route path="/doctors" element={<DoctorsListPage />} />
           <Route path="/booking/:doctorId" element={<BookingPage />} />
           <Route path="/my-appointments" element={<PatientAppointmentsPage />} />
+          <Route path="/my-prescriptions" element={<PatientPrescriptionsPage />} />
         </Route>
 
         {/* Doctor Protected Routes */}
@@ -63,6 +67,8 @@ const App = () => {
           <Route path="/doctor/availability" element={<AvailabilityPage />} />
           <Route path="/doctor/services" element={<ServicesPage />} />
           <Route path="/doctor/appointments" element={<DoctorAppointmentsPage />} />
+          <Route path="/doctor/consultation/:appointmentId" element={<ConsultationPage />} />
+          <Route path="/doctor/prescriptions" element={<DoctorPrescriptionsPage />} />
         </Route>
 
         {/* Fallback */}

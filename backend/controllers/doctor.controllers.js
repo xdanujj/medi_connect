@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Availability } from "../models/availability.models.js";
 import { Doctor } from "../models/doctor.models.js";
 import { Service } from "../models/services.models.js";
@@ -294,4 +295,119 @@ export const createServices = asyncHandler(async (req, res) => {
     ),
   );
 });
+
+export const getAppointmentsToday = asyncHandler(async (req, res) => {
+  const doctor = await getDoctorProfile(req.user);
+
+  const { date } = req.query; // format: YYYY-MM-DD
+  let targetDate;
+  if (date) {
+    targetDate = new Date(date);
+    if (isNaN(targetDate.getTime())) {
+      throw new ApiError(400, "Invalid date format. Use YYYY-MM-DD");
+    }
+  } else {
+    const now = new Date();
+    // Adjust for IST
+    const currentIST = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+    targetDate = currentIST;
+  }
+
+  // Create start and end of day using Date.UTC to match the database representation
+  const startOfDay = new Date(
+    Date.UTC(
+      targetDate.getUTCFullYear(),
+      targetDate.getUTCMonth(),
+      targetDate.getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    )
+  );
+
+  const endOfDay = new Date(
+    Date.UTC(
+      targetDate.getUTCFullYear(),
+      targetDate.getUTCMonth(),
+      targetDate.getUTCDate(),
+      23,
+      59,
+      59,
+      999
+    )
+  );
+
+  const appointments = await Appointment.find({
+    doctor: doctor._id,
+    startDateTime: {
+      $gte: startOfDay,
+      $lte: endOfDay,
+    },
+  })
+    .populate("patient", "name age gender phone profilePhoto")
+    .populate("slot", "startDateTime endDateTime status")
+    .sort({ startDateTime: 1 });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      appointments,
+      "Doctor's daily appointments fetched successfully"
+    )
+  );
+});
+
+export const markAttendance = asyncHandler(async (req, res) => {
+  const doctor = await getDoctorProfile(req.user);
+  const { appointmentId } = req.params;
+  const { status } = req.body;
+
+  if (!["attended", "no-show"].includes(status)) {
+    throw new ApiError(
+      400,
+      "Invalid status. Must be either 'attended' or 'no-show'"
+    );
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(appointmentId)) {
+    throw new ApiError(400, "Invalid appointment ID");
+  }
+
+  const appointment = await Appointment.findOne({
+    _id: appointmentId,
+    doctor: doctor._id,
+  });
+
+  if (!appointment) {
+    throw new ApiError(
+      404,
+      "Appointment not found or does not belong to this doctor"
+    );
+  }
+
+  const prevStatus = appointment.status;
+  appointment.status = status;
+  if (status === "attended") {
+    appointment.attendedAt = new Date();
+  }
+
+  // Push to audit trail/statusHistory
+  appointment.statusHistory.push({
+    status,
+    changedAt: new Date(),
+    changedBy: "doctor",
+  });
+
+  await appointment.save();
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      appointment,
+      `Appointment status updated from '${prevStatus}' to '${status}' successfully`
+    )
+  );
+});
+
 

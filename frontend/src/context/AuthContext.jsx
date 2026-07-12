@@ -49,6 +49,10 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       setAccessToken(token);
 
+      if (userData.role === 'patient') {
+        setTimeout(registerFcmToken, 1000);
+      }
+
       return { success: true, user: userData };
     } catch (error) {
       const message =
@@ -58,6 +62,32 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   };
+
+  const registerFcmToken = async () => {
+    try {
+      if ('Notification' in window) {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          let token = localStorage.getItem('fcmToken');
+          if (!token) {
+            token = 'mock_fcm_' + Math.random().toString(36).substring(2) + '_' + Date.now();
+            localStorage.setItem('fcmToken', token);
+          }
+          await api.patch('/patient/fcm-token', { fcmToken: token });
+          console.log('✅ FCM token registered on backend:', token);
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ FCM token registration failed:', err.message);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.role === 'patient' && accessToken) {
+      registerFcmToken();
+    }
+  }, [user, accessToken]);
+
 
   const logout = async () => {
     try {

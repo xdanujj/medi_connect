@@ -25,6 +25,11 @@ const patientSchema = new Schema(
     },
 
     profilePhoto: String,
+
+    fcmToken: {
+      type: String,
+      default: null,
+    },
     
   },
   { timestamps: true },

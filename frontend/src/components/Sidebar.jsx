@@ -8,12 +8,14 @@ import {
   Users,
   CalendarCheck,
   Heart,
+  FileText,
 } from 'lucide-react';
 import './Sidebar.css';
 
 const patientLinks = [
   { to: '/doctors', icon: Users, label: 'Find Doctors' },
   { to: '/my-appointments', icon: CalendarCheck, label: 'My Appointments' },
+  { to: '/my-prescriptions', icon: FileText, label: 'My Prescriptions' },
 ];
 
 const doctorLinks = [
@@ -21,6 +23,7 @@ const doctorLinks = [
   { to: '/doctor/appointments', icon: Calendar, label: 'Appointments' },
   { to: '/doctor/availability', icon: Clock, label: 'Availability' },
   { to: '/doctor/services', icon: Stethoscope, label: 'Services' },
+  { to: '/doctor/prescriptions', icon: FileText, label: 'My Prescriptions' },
 ];
 
 const Sidebar = () => {
