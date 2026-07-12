@@ -5,8 +5,8 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
+  key_id: process.env.RAZORPAY_KEY_ID || "rzp_test_SSjdPpx8CEdyxw",
+  key_secret: process.env.RAZORPAY_KEY_SECRET || "mock_secret",
 });
 
 export const createOrder = asyncHandler(async (req, res) => {

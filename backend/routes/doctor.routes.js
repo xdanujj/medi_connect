@@ -7,6 +7,7 @@ import {
   getServices,
   setAvailability,
 } from "../controllers/doctor.controllers.js";
+
 const router=Router();
 
 router.post("/set-availability", verifyJWT, setAvailability);

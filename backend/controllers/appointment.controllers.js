@@ -10,6 +10,15 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import crypto from "crypto";
 
+const verifySignature = (orderId, paymentId, signature) => {
+  const text = `${orderId}|${paymentId}`;
+  const generatedSignature = crypto
+    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+    .update(text)
+    .digest("hex");
+  return generatedSignature === signature;
+};
+
 const DEFAULT_HOLD_MINUTES = 10;
 const ALLOWED_HOLD_MINUTES = new Set([5, 10]);
 
