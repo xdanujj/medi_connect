@@ -1,38 +1,68 @@
-import admin from "firebase-admin";
+import { createRequire } from "module";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
-let firebaseApp;
+const require = createRequire(import.meta.url);
+
+// firebase-admin v14 — flat named exports
+const { initializeApp, cert, getApps } = require("firebase-admin/app");
+const { getMessaging }                  = require("firebase-admin/messaging");
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+
 let messaging;
 
 const initializeFirebase = () => {
-  if (firebaseApp) return; // Already initialized
+  // Skip if already initialised
+  if (getApps().length > 0) {
+    messaging = getMessaging();
+    return;
+  }
 
   try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}");
-
-    if (!serviceAccount.project_id || serviceAccount.project_id === "your-project-id") {
-      console.warn("⚠️  Firebase: FIREBASE_SERVICE_ACCOUNT not configured. FCM notifications will be skipped.");
+    const rawAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (!rawAccount) {
+      console.warn("⚠️  Firebase: FIREBASE_SERVICE_ACCOUNT not set. FCM notifications will be skipped.");
       return;
     }
 
-    firebaseApp = admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
+    let serviceAccount;
+    if (rawAccount.trim().startsWith("{")) {
+      serviceAccount = JSON.parse(rawAccount);
+    } else {
+      // Resolve relative to this util file first, then fall back to CWD
+      let filePath = path.resolve(__dirname, rawAccount);
+      if (!fs.existsSync(filePath)) filePath = path.resolve(rawAccount);
+      if (!fs.existsSync(filePath)) {
+        console.warn(`⚠️  Firebase: service account file not found at ${filePath}. FCM notifications will be skipped.`);
+        return;
+      }
+      serviceAccount = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    }
 
-    messaging = admin.messaging();
+    if (!serviceAccount?.project_id || serviceAccount.project_id === "your-project-id") {
+      console.warn("⚠️  Firebase: invalid service account. FCM notifications will be skipped.");
+      return;
+    }
+
+    initializeApp({ credential: cert(serviceAccount) });
+    messaging = getMessaging();
     console.log("✅ Firebase Admin initialized successfully.");
   } catch (err) {
-    console.warn("⚠️  Firebase init failed (check FIREBASE_SERVICE_ACCOUNT):", err.message);
+    console.warn("⚠️  Firebase init failed:", err.message);
   }
 };
 
 initializeFirebase();
 
 /**
- * Send FCM push notification to a specific device token.
- * Silently skips if Firebase is not configured or token is missing.
+ * Send an FCM push notification to a specific device token.
+ * Silently skips if Firebase is not configured or no token is provided.
  */
 export const sendPushNotification = async ({ token, title, body, data = {} }) => {
   if (!messaging || !token) {

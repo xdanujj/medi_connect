@@ -4,7 +4,6 @@ import path from "path";
 import FormData from "form-data";
 import fetch from "node-fetch";
 import PDFDocument from "pdfkit";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Doctor } from "../models/doctor.models.js";
 import { Patient } from "../models/patient.models.js";
 import { Appointment } from "../models/appointment.models.js";
